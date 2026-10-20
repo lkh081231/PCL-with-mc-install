@@ -69,10 +69,11 @@ jobs:
             if ($Matches[1] -eq 'True') {
               Write-Host "Found RestrictMcDownload = True, modifying to False..."
               $content = $content -replace 'Public\s+Const\s+RestrictMcDownload\s+As\s+Boolean\s*=\s*True', 'Public Const RestrictMcDownload As Boolean = False'
-              [System.IO.File]::WriteAllText((Resolve-Path $secretFile), $content, [System.Text.Encoding]::UTF8)
             } else {
               Write-Host "RestrictMcDownload is already False."
             }
+            $content = $content -replace 'Public\s+OAuthClientId\s+As\s+String\s*=\s*If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\),\s*""\)', 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "0ad61f75-d686-4c70-af9a-536a6d798bfc")'
+            [System.IO.File]::WriteAllText((Resolve-Path $secretFile), $content, [System.Text.Encoding]::UTF8)
           } else {
             Write-Error "在 ModSecret.vb 中未找到 Public Const RestrictMcDownload As Boolean 参数定义，无法通过该参数解除限制！"
             exit 1
@@ -181,8 +182,12 @@ jobs:
         if: steps.check_release.outputs.should_build == 'true'
         shell: pwsh
         run: |
-          (Get-Content "Plain Craft Launcher 2\Modules\ModSecret.vb") -replace 'Public OAuthClientId As String = If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\), ""\)', 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "${{ secrets.CLIENT_ID }}")' | Out-File "Plain Craft Launcher 2\Modules\ModSecret.vb" -Encoding utf8
-          (Get-Content "Plain Craft Launcher 2\Modules\ModSecret.vb") -replace 'Public CurseForgeAPIKey As String = If\(Environment\.GetEnvironmentVariable\("PCL_CURSEFORGE_API_KEY"\), ""\)', 'Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "${{ secrets.CURSEFORGE_API_KEY }}")' | Out-File "Plain Craft Launcher 2\Modules\ModSecret.vb" -Encoding utf8
+          if ("${{ secrets.CLIENT_ID }}" -ne "") {
+            (Get-Content "Plain Craft Launcher 2\Modules\ModSecret.vb") -replace 'Public OAuthClientId As String = If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\), "[^"]*"\)', 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "${{ secrets.CLIENT_ID }}")' | Out-File "Plain Craft Launcher 2\Modules\ModSecret.vb" -Encoding utf8
+          }
+          if ("${{ secrets.CURSEFORGE_API_KEY }}" -ne "") {
+            (Get-Content "Plain Craft Launcher 2\Modules\ModSecret.vb") -replace 'Public CurseForgeAPIKey As String = If\(Environment\.GetEnvironmentVariable\("PCL_CURSEFORGE_API_KEY"\), ""\)', 'Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "${{ secrets.CURSEFORGE_API_KEY }}")' | Out-File "Plain Craft Launcher 2\Modules\ModSecret.vb" -Encoding utf8
+          }
           (Get-Content "Plain Craft Launcher 2\Modules\Base\ModBase.vb") -replace 'Public Const CommitHash As String = ""', 'Public Const CommitHash As String = "${{ github.sha }}"' | Out-File "Plain Craft Launcher 2\Modules\Base\ModBase.vb" -Encoding utf8
 
       - name: Restore NuGet Packages
