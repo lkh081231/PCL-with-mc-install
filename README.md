@@ -7,6 +7,19 @@
 > 
 > 👉 **[点击前往 Releases 页面直接下载最新版本](https://github.com/lkh081231/PCL-with-mc-intstall/releases/latest)**
 
+### ⚠️ 与官网闭源正式版的功能差异 / 限制说明
+
+由于原仓库在开源时移除了部分私有密钥与闭源服务端鉴权代码，从本仓库 Releases 下载的开源编译版与官网闭源版相比存在以下差异：
+
+1. **微软正版账号新增登录（默认缺失密钥）**：微软 OAuth 登录需要应用 `Client ID`（离线登录和第三方外置登录如 LittleSkin / 统一通行证不受影响）。如需使用正版登录，可在运行电脑上自行设置系统环境变量 `PCL_MS_CLIENT_ID`。
+2. **CurseForge 资源检索与下载（等待审批中）**：CurseForge 官方 API 要求请求携带 `CURSEFORGE_API_KEY`（Modrinth 源不受影响，可正常搜索下载）。**目前我已经申请了 `CURSEFORGE_API_KEY`，正在等待官方审批**，审批通过配置后即可恢复；在此之前也可在本地设置环境变量 `PCL_CURSEFORGE_API_KEY` 自行使用。
+3. **大厅联机功能（不可用）**：联机模块依赖 PCL 官方闭源服务端的配置鉴权下发，开源版无法获取该配置。
+4. **启动器本体在线更新（已移除）**：开源版移除了连接官方更新服务器的逻辑（这也正好避免了启动器自动更新回被限制下载的官方版本）。
+5. **赞助解锁主题 & 百宝箱（已移除）**：隐藏主题的解锁校验算法、识别码生成及早期调试百宝箱未在开源仓库中公开（默认主题及基础 UI 设置仍可正常使用）。
+6. **注册表配置隔离 & 启动弹窗提示（行为差异）**：
+   - 每次启动时会弹出一次“开源版本说明”提示框。
+   - 全局注册表配置存储在 `HKEY_CURRENT_USER\Software\PCLDebug`（官方版为 `PCL`），因此不会自动读取旧版保存在注册表中的全局设置（游戏目录内的 `PCL\Setup.ini` 配置不受影响）。
+
 ---
 
 [![Stars](https://img.shields.io/github/stars/Meloong-Git/PCL?style=flat&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEiIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiI+PHBhdGggZD0iTTggLjI1YS43NS43NSAwIDAgMSAuNjczLjQxOGwxLjg4MiAzLjgxNSA0LjIxLjYxMmEuNzUuNzUgMCAwIDEgLjQxNiAxLjI3OWwtMy4wNDYgMi45Ny43MTkgNC4xOTJhLjc1MS43NTEgMCAwIDEtMS4wODguNzkxTDggMTIuMzQ3bC0zLjc2NiAxLjk4YS43NS43NSAwIDAgMS0xLjA4OC0uNzlsLjcyLTQuMTk0TC44MTggNi4zNzRhLjc1Ljc1IDAgMCAxIC40MTYtMS4yOGw0LjIxLS42MTFMNy4zMjcuNjY4QS43NS43NSAwIDAgMSA4IC4yNVoiIGZpbGw9IiNlYWM1NGYiLz48L3N2Zz4=&logoSize=auto&label=Stars&labelColor=444444&color=eac54f)](https://github.com/Meloong-Git/PCL/)
