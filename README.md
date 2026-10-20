@@ -1,7 +1,7 @@
 # Plain Craft Launcher (解除 MC 下载限制版)
 
 > [!TIP]
-> **关于本仓库**：本仓库 Fork 自官方 [Meloong-Git/PCL](https://github.com/Meloong-Git/PCL)，通过改动源码 (*ps:具体方式为避免给原作者惹麻烦就不说，想知道自己问ai去吧 (⌒▽⌒)*)  **解除了 Minecraft 本体及整合包的下载限制**。
+> **关于本仓库**：本仓库 Fork 自官方 [Meloong-Git/PCL](https://github.com/Meloong-Git/PCL)，通过改动源码 (*ps:具体方式为避免给原作者惹麻烦就不说了，想知道自己问ai去吧 (⌒▽⌒)*)  **解除了 Minecraft 本体及整合包的下载限制**。
 > 
 > 本仓库配置了 GitHub Actions 自动工作流，每当上游仓库更新时会自动同步最新代码、验证解除限制是否有效，并将编译打包好的可执行程序（`.zip` 压缩包，解压即可直接运行）自动发布到本仓库的 **[Releases](https://github.com/lkh081231/PCL-with-mc-intstall/releases)** 页面。
 > 
