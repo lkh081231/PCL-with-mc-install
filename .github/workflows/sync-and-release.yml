@@ -1,0 +1,236 @@
+name: Sync, Build and Release
+
+on:
+  schedule:
+    # 每天 UTC 00:00 和 12:00 检查上游更新
+    - cron: '0 0,12 * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Plain Craft Launcher 2/**'
+      - 'PCLCS/**'
+      - 'MeloongCore/**'
+      - '.github/workflows/sync-and-release.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-build-release:
+    name: Sync Upstream, Verify & Build Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync with Upstream
+        id: sync
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/Meloong-Git/PCL.git || git remote set-url upstream https://github.com/Meloong-Git/PCL.git
+          git fetch upstream main --tags
+
+          LOCAL_HEAD=$(git rev-parse HEAD)
+          UPSTREAM_HEAD=$(git rev-parse upstream/main)
+
+          if ! git merge-base --is-ancestor "$UPSTREAM_HEAD" "$LOCAL_HEAD"; then
+            echo "New upstream commits detected. Merging upstream/main..."
+            git merge upstream/main -X theirs --no-edit || {
+              echo "::error::Failed to merge upstream/main automatically."
+              exit 1
+            }
+            git submodule update --init --recursive
+            echo "synced=true" >> $GITHUB_OUTPUT
+          else
+            echo "Already up-to-date with upstream/main."
+            echo "synced=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify and Set RestrictMcDownload = False
+        shell: pwsh
+        run: |
+          $secretFile = "Plain Craft Launcher 2\Modules\ModSecret.vb"
+          if (-not (Test-Path $secretFile)) {
+            Write-Error "找不到 $secretFile，无法解除下载限制！"
+            exit 1
+          }
+
+          $content = Get-Content $secretFile -Raw
+
+          if ($content -match 'Public\s+Const\s+RestrictMcDownload\s+As\s+Boolean\s*=\s*(True|False)') {
+            if ($Matches[1] -eq 'True') {
+              Write-Host "Found RestrictMcDownload = True, modifying to False..."
+              $content = $content -replace 'Public\s+Const\s+RestrictMcDownload\s+As\s+Boolean\s*=\s*True', 'Public Const RestrictMcDownload As Boolean = False'
+              [System.IO.File]::WriteAllText((Resolve-Path $secretFile), $content, [System.Text.Encoding]::UTF8)
+            } else {
+              Write-Host "RestrictMcDownload is already False."
+            }
+          } else {
+            Write-Error "在 ModSecret.vb 中未找到 Public Const RestrictMcDownload As Boolean 参数定义，无法通过该参数解除限制！"
+            exit 1
+          }
+
+          # 检查各核心功能模块是否依然受 RestrictMcDownload 参数控制，确认修改该参数能有效解除限制
+          $expectedReferences = @(
+            @{ Path = "Plain Craft Launcher 2\Pages\PageDownload\PageDownloadInstall.xaml.vb"; Desc = "MC本体下载页面 (PageDownloadInstall)" },
+            @{ Path = "Plain Craft Launcher 2\Modules\Minecraft\ModModpack.vb"; Desc = "整合包安装模块 (ModModpack)" },
+            @{ Path = "Plain Craft Launcher 2\Pages\PageDownload\PageDownloadModify.vb"; Desc = "版本修改页面 (PageDownloadModify)" },
+            @{ Path = "Plain Craft Launcher 2\Pages\PageDownload\Resource\PageDownloadCompDetail.xaml.vb"; Desc = "资源详情安装 (PageDownloadCompDetail)" }
+          )
+
+          foreach ($item in $expectedReferences) {
+            if (-not (Test-Path $item.Path)) {
+              Write-Error "关键文件缺失: $($item.Path) ($($item.Desc))，无法确认解除限制是否有效！"
+              exit 1
+            }
+            $fileContent = Get-Content $item.Path -Raw
+            if ($fileContent -notmatch 'RestrictMcDownload') {
+              Write-Error "$($item.Desc) ($($item.Path)) 中不再使用 RestrictMcDownload 参数，仅修改该参数已无法解除限制！"
+              exit 1
+            }
+          }
+
+          # 检查是否有绕过 RestrictMcDownload 硬编码抛出限制提示的情况
+          $allVbFiles = Get-ChildItem -Path "Plain Craft Launcher 2" -Filter "*.vb" -Recurse
+          foreach ($file in $allVbFiles) {
+            if ($file.Name -eq "FormMain.xaml.vb") { continue }
+            $lines = Get-Content $file.FullName
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+              if ($lines[$i] -match "暂时不再提供 MC 下载功能") {
+                $contextStart = [Math]::Max(0, $i - 3)
+                $context = ($lines[$contextStart..$i] -join "`n")
+                if ($context -notmatch "RestrictMcDownload") {
+                  Write-Error "检测到 $($file.FullName) 第 $($i+1) 行存在不依赖 RestrictMcDownload 的下载限制逻辑，该参数已无法完全解除限制！"
+                  exit 1
+                }
+              }
+            }
+          }
+
+          Write-Host "验证通过：修改 RestrictMcDownload = False 可有效解除 MC 下载限制。"
+
+      - name: Commit and Push Synced Changes
+        shell: bash
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            git add "Plain Craft Launcher 2/Modules/ModSecret.vb"
+            git commit -m "chore: sync upstream and set RestrictMcDownload = False"
+          fi
+          if [[ "${{ steps.sync.outputs.synced }}" == "true" ]] || [[ -n $(git log origin/main..HEAD --oneline) ]]; then
+            git push origin HEAD:main
+          fi
+
+      - name: Check if Release Needed
+        id: check_release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $modBase = Get-Content "Plain Craft Launcher 2\Modules\Base\ModBase.vb" -Raw
+          $version = (git describe --tags --always).Trim()
+          if ($modBase -match 'Public\s+Const\s+VersionBaseName\s+As\s+String\s*=\s*"([^"]+)"') {
+            $version = $Matches[1]
+          }
+          $shortSha = (git rev-parse --short HEAD).Trim()
+          $tagName = "v$version-$shortSha"
+          Write-Host "Version: $version, Tag: $tagName"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tagName" >> $env:GITHUB_OUTPUT
+
+          if ("${{ github.event_name }}" -eq "schedule") {
+            if ("${{ steps.sync.outputs.synced }}" -ne "true") {
+              $existing = gh release view $tagName 2>$null
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "Release $tagName already exists and no new upstream commits. Skipping build."
+                "should_build=false" >> $env:GITHUB_OUTPUT
+                exit 0
+              }
+            }
+          }
+          "should_build=true" >> $env:GITHUB_OUTPUT
+
+      - name: Setup MSBuild.exe
+        if: steps.check_release.outputs.should_build == 'true'
+        uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+
+      - name: Update Help
+        if: steps.check_release.outputs.should_build == 'true'
+        shell: pwsh
+        run: |
+          Set-Location ..
+          git clone https://github.com/LTCatt/PCL2Help.git -b master --single-branch --depth 1
+          Set-Location PCL2Help
+          Remove-Item -Path *.* -Recurse -Force
+          Compress-Archive -Path .\* -DestinationPath .\Help.zip
+          Copy-Item -Path .\Help.zip -Destination "${{ github.workspace }}\Plain Craft Launcher 2\Resources\Help.zip" -Force
+          Set-Location ..
+          Remove-Item PCL2Help -Recurse -Force
+          Set-Location "${{ github.workspace }}"
+
+      - name: Inject Build Metadata
+        if: steps.check_release.outputs.should_build == 'true'
+        shell: pwsh
+        run: |
+          (Get-Content "Plain Craft Launcher 2\Modules\ModSecret.vb") -replace 'Public OAuthClientId As String = If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\), ""\)', 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "${{ secrets.CLIENT_ID }}")' | Out-File "Plain Craft Launcher 2\Modules\ModSecret.vb" -Encoding utf8
+          (Get-Content "Plain Craft Launcher 2\Modules\ModSecret.vb") -replace 'Public CurseForgeAPIKey As String = If\(Environment\.GetEnvironmentVariable\("PCL_CURSEFORGE_API_KEY"\), ""\)', 'Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "${{ secrets.CURSEFORGE_API_KEY }}")' | Out-File "Plain Craft Launcher 2\Modules\ModSecret.vb" -Encoding utf8
+          (Get-Content "Plain Craft Launcher 2\Modules\Base\ModBase.vb") -replace 'Public Const CommitHash As String = ""', 'Public Const CommitHash As String = "${{ github.sha }}"' | Out-File "Plain Craft Launcher 2\Modules\Base\ModBase.vb" -Encoding utf8
+
+      - name: Restore NuGet Packages
+        if: steps.check_release.outputs.should_build == 'true'
+        run: dotnet restore PCLCS\PCLCS.csproj
+
+      - name: Build Release
+        if: steps.check_release.outputs.should_build == 'true'
+        run: msbuild "Plain Craft Launcher 2\Plain Craft Launcher 2.vbproj" -p:Configuration=Release -t:Rebuild
+
+      - name: Package Executable into ZIP
+        if: steps.check_release.outputs.should_build == 'true'
+        id: package
+        shell: pwsh
+        run: |
+          $exePath = "Plain Craft Launcher 2\bin\Plain Craft Launcher 2.exe"
+          if (-not (Test-Path $exePath)) {
+            $exePath = "Plain Craft Launcher 2\obj\Release\Plain Craft Launcher 2.exe"
+          }
+          if (-not (Test-Path $exePath)) {
+            Write-Error "编译产物 Plain Craft Launcher 2.exe 未找到！"
+            exit 1
+          }
+          New-Item -ItemType Directory -Force -Path "release_pkg" | Out-Null
+          Copy-Item -Path $exePath -Destination "release_pkg\Plain Craft Launcher 2.exe" -Force
+          $zipName = "PCL2_Release_${{ steps.check_release.outputs.version }}.zip"
+          Compress-Archive -Path "release_pkg\*" -DestinationPath $zipName -Force
+          "zip_name=$zipName" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Build Artifact
+        if: steps.check_release.outputs.should_build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PCL2-Release-${{ steps.check_release.outputs.version }}
+          path: ${{ steps.package.outputs.zip_name }}
+
+      - name: Publish to GitHub Releases
+        if: steps.check_release.outputs.should_build == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.check_release.outputs.tag }}
+          name: "PCL2 ${{ steps.check_release.outputs.version }} (解除MC下载限制版)"
+          body: |
+            自动同步上游 [Meloong-Git/PCL](https://github.com/Meloong-Git/PCL) 并解除 MC 下载限制 (`RestrictMcDownload = False`)。
+            解压 `${{ steps.package.outputs.zip_name }}` 即可直接运行 `Plain Craft Launcher 2.exe`。
+          files: |
+            ${{ steps.package.outputs.zip_name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
