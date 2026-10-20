@@ -12,7 +12,6 @@ on:
       - 'Plain Craft Launcher 2/**'
       - 'PCLCS/**'
       - 'MeloongCore/**'
-      - '.github/workflows/sync-and-release.yml'
 
 permissions:
   contents: write
@@ -123,7 +122,7 @@ jobs:
         run: |
           if [[ -n $(git status --porcelain) ]]; then
             git add "Plain Craft Launcher 2/Modules/ModSecret.vb"
-            git commit -m "chore: sync upstream and set RestrictMcDownload = False"
+            git commit -m "chore: sync upstream and unlock mc download"
           fi
           if [[ "${{ steps.sync.outputs.synced }}" == "true" ]] || [[ -n $(git log origin/main..HEAD --oneline) ]]; then
             git push origin HEAD:main
@@ -227,10 +226,10 @@ jobs:
           tag_name: ${{ steps.check_release.outputs.tag }}
           name: "PCL2 ${{ steps.check_release.outputs.version }} (解除MC下载限制版)"
           body: |
-            自动同步上游 [Meloong-Git/PCL](https://github.com/Meloong-Git/PCL) 并解除 MC 下载限制 (`RestrictMcDownload = False`)。
+            自动同步上游 [Meloong-Git/PCL](https://github.com/Meloong-Git/PCL) 并解除 MC 下载限制。
             解压 `${{ steps.package.outputs.zip_name }}` 即可直接运行 `Plain Craft Launcher 2.exe`。
           files: |
             ${{ steps.package.outputs.zip_name }}
-          generate_release_notes: true
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
