@@ -134,13 +134,17 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           $modBase = Get-Content "Plain Craft Launcher 2\Modules\Base\ModBase.vb" -Raw
           $version = (git describe --tags --always).Trim()
           if ($modBase -match 'Public\s+Const\s+VersionBaseName\s+As\s+String\s*=\s*"([^"]+)"') {
             $version = $Matches[1]
           }
-          $shortSha = (git rev-parse --short HEAD).Trim()
+          $shortSha = (git log -1 --format=%h -- "Plain Craft Launcher 2" "PCLCS" "MeloongCore").Trim()
+          if (-not $shortSha) {
+            $shortSha = (git rev-parse --short HEAD).Trim()
+          }
           $tagName = "v$version-$shortSha"
           Write-Host "Version: $version, Tag: $tagName"
           "version=$version" >> $env:GITHUB_OUTPUT
@@ -148,7 +152,7 @@ jobs:
 
           if ("${{ github.event_name }}" -eq "schedule") {
             if ("${{ steps.sync.outputs.synced }}" -ne "true") {
-              $existing = gh release view $tagName 2>$null
+              $existing = gh release view $tagName --repo "${{ github.repository }}" 2>$null
               if ($LASTEXITCODE -eq 0) {
                 Write-Host "Release $tagName already exists and no new upstream commits. Skipping build."
                 "should_build=false" >> $env:GITHUB_OUTPUT
@@ -157,6 +161,8 @@ jobs:
             }
           }
           "should_build=true" >> $env:GITHUB_OUTPUT
+          $global:LASTEXITCODE = 0
+          exit 0
 
       - name: Setup MSBuild.exe
         if: steps.check_release.outputs.should_build == 'true'
