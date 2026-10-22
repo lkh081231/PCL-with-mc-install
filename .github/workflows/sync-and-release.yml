@@ -203,7 +203,8 @@ jobs:
             Write-Error "在 ModSecret.vb 中未找到 CurseForgeAPIProxy 代理地址！"
             exit 1
           }
-          $testUrl = $Matches[1].TrimEnd('/') + "/v1/mods/238222"
+          # /v1/games 必须携带有效的 CurseForge Key 才能访问，且不依赖任何具体 Mod（根路径 / 无需 Key 也会返回 200，无法用于验证）
+          $testUrl = $Matches[1].TrimEnd('/') + "/v1/games"
           $headers = @{
             "Ocp-Apim-Subscription-Key" = $env:SEC_PROXY_KEY
             "User-Agent" = "PCL2/${{ steps.check_release.outputs.version }}.0"
@@ -214,7 +215,7 @@ jobs:
             try {
               $resp = Invoke-WebRequest -Uri $testUrl -Headers $headers -TimeoutSec 30 -SkipHttpErrorCheck
               $status = [int]$resp.StatusCode
-              if ($status -eq 200 -and ($resp.Content | ConvertFrom-Json).data.id -eq 238222) {
+              if ($status -eq 200 -and $null -ne ($resp.Content | ConvertFrom-Json).data) {
                 Write-Host "CurseForge 代理 Key 测试通过 (HTTP 200)。"
                 exit 0
               }
