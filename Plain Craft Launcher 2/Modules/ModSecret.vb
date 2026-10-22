@@ -10,6 +10,8 @@ Friend Module ModSecret
     Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "0ad61f75-d686-4c70-af9a-536a6d798bfc")
     'CurseForge API Key
     Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "")
+    'CurseForge API 代理（由代理服务端注入 API Key，客户端不包含 Key）；若设置了 CurseForgeAPIKey 则直连官方 API
+    Public CurseForgeAPIProxy As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_PROXY"), "https://pcl.azure-api.net")
     '用于匿名数据收集的腾讯云日志服务上报 URL，形如 https://{region}.cls.tencentcs.com/track?topic_id={topic_id}
     Public Const ClsBaseUrl As String = ""
 
@@ -17,6 +19,11 @@ Friend Module ModSecret
 
     Public Const RestrictMcDownload As Boolean = False
     Friend Function SecretCdnSign(UrlWithMark As String) As String
+        '未配置本地 API Key 时，将 CurseForge API 请求转发至代理
+        If String.IsNullOrEmpty(CurseForgeAPIKey) AndAlso Not String.IsNullOrEmpty(CurseForgeAPIProxy) AndAlso
+           UrlWithMark.StartsWithF("https://api.curseforge.com/") Then
+            UrlWithMark = CurseForgeAPIProxy.TrimEnd("/"c) & UrlWithMark.Substring("https://api.curseforge.com".Length)
+        End If
         If Not UrlWithMark.EndsWithF("{CDN}") Then Return UrlWithMark
         Return UrlWithMark.Replace("{CDN}", "").Replace(" ", "%20")
     End Function
@@ -34,7 +41,7 @@ Friend Module ModSecret
             End If
         End If
         If Not SimulateBrowserHeaders Then Req.Headers.Add("Referer", $"http://{VersionCode}.open.pcl2.server/")
-        If Url.Contains("api.curseforge.com") OrElse Url.Contains("forgecdn.net") Then Req.Headers.Add("x-api-key", CurseForgeAPIKey)
+        If Not String.IsNullOrEmpty(CurseForgeAPIKey) AndAlso (Url.Contains("api.curseforge.com") OrElse Url.Contains("forgecdn.net")) Then Req.Headers.Add("x-api-key", CurseForgeAPIKey)
     End Sub
 
 #End Region
