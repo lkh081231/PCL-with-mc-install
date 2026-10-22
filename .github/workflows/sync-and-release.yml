@@ -23,6 +23,7 @@ on:
       - 'Plain Craft Launcher 2/**'
       - 'PCLCS/**'
       - 'MeloongCore/**'
+      - '.github/workflows/sync-and-release.yml'
 
 permissions:
   contents: write
@@ -156,9 +157,9 @@ jobs:
           if (-not $shortSha) {
             $shortSha = (git rev-parse --short HEAD).Trim()
           }
-          $suffix = "${{ github.event.inputs.tag_suffix }}"
+          $suffix = if ("${{ github.event.inputs.tag_suffix }}" -ne "") { "${{ github.event.inputs.tag_suffix }}" } else { "-preview" }
           $tagName = "v$version-$shortSha$suffix"
-          $isPrerelease = if ("${{ github.event.inputs.prerelease }}" -eq "true") { "true" } else { "false" }
+          $isPrerelease = if ("${{ github.event.inputs.prerelease }}" -eq "false") { "false" } else { "true" }
           $releaseTitle = if ($isPrerelease -eq "true") { "PCL2 $version Preview (解除MC下载限制版)" } else { "PCL2 $version (解除MC下载限制版)" }
           Write-Host "Version: $version, Tag: $tagName, Prerelease: $isPrerelease"
           "version=$version" >> $env:GITHUB_OUTPUT

@@ -3,9 +3,9 @@
 > [!TIP]
 > **关于本仓库**：本仓库 Fork 自官方 [Meloong-Git/PCL](https://github.com/Meloong-Git/PCL)，通过改动源码 (*ps:具体方式为避免给原作者惹麻烦就不说了，想知道自己问ai去吧 (⌒▽⌒)*)  **解除了 Minecraft 本体及整合包的下载限制**。
 > 
-> 本仓库配置了 GitHub Actions 自动工作流，每当上游仓库更新时会自动同步最新代码、验证解除限制是否有效，并将编译打包好的可执行程序（`.zip` 压缩包，解压即可直接运行）自动发布到本仓库的 **[Releases](https://github.com/lkh081231/PCL-with-mc-intstall/releases)** 页面。
+> 本仓库配置了 GitHub Actions 自动工作流，每当上游仓库更新时会自动同步最新代码、验证解除限制是否有效，并将编译打包好的可执行程序（`.zip` 压缩包，解压即可直接运行）自动发布到本仓库的 **[Releases](https://github.com/lkh081231/PCL-with-mc-install/releases)** 页面。
 > 
-> 👉 **[点击前往 Releases 页面直接下载最新版本](https://github.com/lkh081231/PCL-with-mc-intstall/releases/latest)**
+> 👉 **[点击前往 Releases 页面直接下载最新版本](https://github.com/lkh081231/PCL-with-mc-install/releases)**
 
 ### ⚠️ 与官网闭源正式版的功能差异 / 限制说明
 
@@ -36,6 +36,6 @@
 <br/>
 
 ### 相关资源
-- [PCL 下载（原版）](https://meloong.com/pcl)：下载可免费使用的正式版 PCL！解除限制版👉[点击前往 Releases 页面直接下载最新版本](https://github.com/lkh081231/PCL-with-mc-intstall/releases/latest)
+- [PCL 下载（原版）](https://meloong.com/pcl)：下载可免费使用的正式版 PCL！解除限制版👉[点击前往 Releases 页面直接下载最新版本](https://github.com/lkh081231/PCL-with-mc-install/releases)
 - [PCL 功能投票](https://github.com/Meloong-Git/PCL/discussions/2)：来参加投票吧，开发者会优先处理票数较高的项目！
 - [帮助文档库](https://github.com/LTCatt/PCL2Help)：PCL 内置帮助文档的存储库
