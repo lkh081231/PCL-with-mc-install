@@ -54,6 +54,7 @@ jobs:
       shell: pwsh
       env:
         SEC_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+        SEC_PROXY_KEY: ${{ secrets.CF_PROXY_KEY }}
         COMMIT_SHA: ${{ github.sha }}
       run: |
         $secretFile = Resolve-Path "Plain Craft Launcher 2\Modules\ModSecret.vb"
@@ -61,6 +62,10 @@ jobs:
         if (-not [string]::IsNullOrEmpty($env:SEC_CLIENT_ID)) {
           $target = 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "' + $env:SEC_CLIENT_ID + '")'
           $content = [regex]::Replace($content, 'Public OAuthClientId As String = If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\), "[^"]*"\)', { param($m) $target })
+        }
+        if (-not [string]::IsNullOrEmpty($env:SEC_PROXY_KEY)) {
+          $targetProxyKey = 'Public CurseForgeProxyKey As String = If(Environment.GetEnvironmentVariable("PCL_CF_PROXY_KEY"), "' + $env:SEC_PROXY_KEY + '")'
+          $content = [regex]::Replace($content, 'Public CurseForgeProxyKey As String = If\(Environment\.GetEnvironmentVariable\("PCL_CF_PROXY_KEY"\), "[^"]*"\)', { param($m) $targetProxyKey })
         }
         [System.IO.File]::WriteAllText($secretFile, $content, [System.Text.Encoding]::UTF8)
 

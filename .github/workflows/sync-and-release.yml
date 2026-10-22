@@ -156,9 +156,17 @@ jobs:
           if (-not $shortSha) {
             $shortSha = (git rev-parse --short HEAD).Trim()
           }
-          $suffix = "${{ github.event.inputs.tag_suffix }}"
+          $suffix = if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            "${{ github.event.inputs.tag_suffix }}"
+          } else {
+            "-preview"
+          }
           $tagName = "v$version-$shortSha$suffix"
-          $isPrerelease = if ("${{ github.event.inputs.prerelease }}" -eq "true") { "true" } else { "false" }
+          $isPrerelease = if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            if ("${{ github.event.inputs.prerelease }}" -eq "true") { "true" } else { "false" }
+          } else {
+            "true"
+          }
           $releaseTitle = if ($isPrerelease -eq "true") { "PCL2 $version Preview (解除MC下载限制版)" } else { "PCL2 $version (解除MC下载限制版)" }
           Write-Host "Version: $version, Tag: $tagName, Prerelease: $isPrerelease"
           "version=$version" >> $env:GITHUB_OUTPUT
@@ -205,6 +213,7 @@ jobs:
         shell: pwsh
         env:
           SEC_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          SEC_PROXY_KEY: ${{ secrets.CF_PROXY_KEY }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
           $secretFile = Resolve-Path "Plain Craft Launcher 2\Modules\ModSecret.vb"
@@ -212,6 +221,10 @@ jobs:
           if (-not [string]::IsNullOrEmpty($env:SEC_CLIENT_ID)) {
             $target = 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "' + $env:SEC_CLIENT_ID + '")'
             $content = [regex]::Replace($content, 'Public OAuthClientId As String = If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\), "[^"]*"\)', { param($m) $target })
+          }
+          if (-not [string]::IsNullOrEmpty($env:SEC_PROXY_KEY)) {
+            $targetProxyKey = 'Public CurseForgeProxyKey As String = If(Environment.GetEnvironmentVariable("PCL_CF_PROXY_KEY"), "' + $env:SEC_PROXY_KEY + '")'
+            $content = [regex]::Replace($content, 'Public CurseForgeProxyKey As String = If\(Environment\.GetEnvironmentVariable\("PCL_CF_PROXY_KEY"\), "[^"]*"\)', { param($m) $targetProxyKey })
           }
           [System.IO.File]::WriteAllText($secretFile, $content, [System.Text.Encoding]::UTF8)
 

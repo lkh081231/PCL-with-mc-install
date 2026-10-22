@@ -1,4 +1,4 @@
-﻿'由于包含加解密等安全信息，本文件中的部分代码已被删除
+'由于包含加解密等安全信息，本文件中的部分代码已被删除
 
 Friend Module ModSecret
 
@@ -12,6 +12,8 @@ Friend Module ModSecret
     Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "")
     'CurseForge API 代理（由代理服务端注入 API Key，客户端不包含 Key）；若设置了 CurseForgeAPIKey 则直连官方 API
     Public CurseForgeAPIProxy As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_PROXY"), "https://pcl.azure-api.net")
+    'Azure API Management Subscription Key（代理防滥用密钥）
+    Public CurseForgeProxyKey As String = If(Environment.GetEnvironmentVariable("PCL_CF_PROXY_KEY"), "")
     '用于匿名数据收集的腾讯云日志服务上报 URL，形如 https://{region}.cls.tencentcs.com/track?topic_id={topic_id}
     Public Const ClsBaseUrl As String = ""
 
@@ -42,6 +44,7 @@ Friend Module ModSecret
         End If
         If Not SimulateBrowserHeaders Then Req.Headers.Add("Referer", $"http://{VersionCode}.open.pcl2.server/")
         If Not String.IsNullOrEmpty(CurseForgeAPIKey) AndAlso (Url.Contains("api.curseforge.com") OrElse Url.Contains("forgecdn.net")) Then Req.Headers.Add("x-api-key", CurseForgeAPIKey)
+        If Not String.IsNullOrEmpty(CurseForgeProxyKey) AndAlso Not String.IsNullOrEmpty(CurseForgeAPIProxy) AndAlso Url.StartsWithF(CurseForgeAPIProxy.TrimEnd("/"c)) Then Req.Headers.Add("Ocp-Apim-Subscription-Key", CurseForgeProxyKey)
     End Sub
 
 #End Region
