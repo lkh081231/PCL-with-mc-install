@@ -1,4 +1,4 @@
-﻿'由于包含加解密等安全信息，本文件中的部分代码已被删除
+'由于包含加解密等安全信息，本文件中的部分代码已被删除
 
 Friend Module ModSecret
 
@@ -9,9 +9,7 @@ Friend Module ModSecret
     '用于微软登录的 ClientId
     Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "0ad61f75-d686-4c70-af9a-536a6d798bfc")
     'CurseForge API Key
-    Private ReadOnly CurseForgeKeyXor As Byte() = {}
-    Private ReadOnly CurseForgeKeyMask As Byte() = {}
-    Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), If(CurseForgeKeyXor.Length > 0 AndAlso CurseForgeKeyXor.Length = CurseForgeKeyMask.Length, Encoding.UTF8.GetString(CurseForgeKeyXor.Select(Function(b, i) b Xor CurseForgeKeyMask(i)).ToArray()), ""))
+    Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "")
     '用于匿名数据收集的腾讯云日志服务上报 URL，形如 https://{region}.cls.tencentcs.com/track?topic_id={topic_id}
     Public Const ClsBaseUrl As String = ""
 

@@ -54,7 +54,6 @@ jobs:
       shell: pwsh
       env:
         SEC_CLIENT_ID: ${{ secrets.CLIENT_ID }}
-        SEC_CF_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
         COMMIT_SHA: ${{ github.sha }}
       run: |
         $secretFile = Resolve-Path "Plain Craft Launcher 2\Modules\ModSecret.vb"
@@ -62,20 +61,6 @@ jobs:
         if (-not [string]::IsNullOrEmpty($env:SEC_CLIENT_ID)) {
           $target = 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "' + $env:SEC_CLIENT_ID + '")'
           $content = [regex]::Replace($content, 'Public OAuthClientId As String = If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\), "[^"]*"\)', { param($m) $target })
-        }
-        if (-not [string]::IsNullOrEmpty($env:SEC_CF_KEY)) {
-          $keyBytes = [System.Text.Encoding]::UTF8.GetBytes($env:SEC_CF_KEY)
-          $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-          $maskBytes = New-Object Byte[] $keyBytes.Length
-          $rng.GetBytes($maskBytes)
-          $xorBytes = New-Object Byte[] $keyBytes.Length
-          for ($i = 0; $i -lt $keyBytes.Length; $i++) {
-            $xorBytes[$i] = $keyBytes[$i] -bxor $maskBytes[$i]
-          }
-          $xorStr = ($xorBytes -join ", ")
-          $maskStr = ($maskBytes -join ", ")
-          $content = $content.Replace('Private ReadOnly CurseForgeKeyXor As Byte() = {}', "Private ReadOnly CurseForgeKeyXor As Byte() = {$xorStr}")
-          $content = $content.Replace('Private ReadOnly CurseForgeKeyMask As Byte() = {}', "Private ReadOnly CurseForgeKeyMask As Byte() = {$maskStr}")
         }
         [System.IO.File]::WriteAllText($secretFile, $content, [System.Text.Encoding]::UTF8)
 

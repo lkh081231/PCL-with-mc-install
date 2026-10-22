@@ -84,10 +84,6 @@ jobs:
               Write-Host "RestrictMcDownload is already False."
             }
             $content = $content -replace 'Public\s+OAuthClientId\s+As\s+String\s*=\s*If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\),\s*""\)', 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "0ad61f75-d686-4c70-af9a-536a6d798bfc")'
-            if ($content -notmatch 'CurseForgeKeyXor') {
-              $cfReplacement = "Private ReadOnly CurseForgeKeyXor As Byte() = {}`r`n    Private ReadOnly CurseForgeKeyMask As Byte() = {}`r`n    Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable(""PCL_CURSEFORGE_API_KEY""), If(CurseForgeKeyXor.Length > 0 AndAlso CurseForgeKeyXor.Length = CurseForgeKeyMask.Length, Encoding.UTF8.GetString(CurseForgeKeyXor.Select(Function(b, i) b Xor CurseForgeKeyMask(i)).ToArray()), """"))"
-              $content = [regex]::Replace($content, 'Public\s+CurseForgeAPIKey\s+As\s+String\s*=\s*If\(Environment\.GetEnvironmentVariable\("PCL_CURSEFORGE_API_KEY"\),\s*""\)', { param($m) $cfReplacement })
-            }
             [System.IO.File]::WriteAllText((Resolve-Path $secretFile), $content, [System.Text.Encoding]::UTF8)
           } else {
             Write-Error "在 ModSecret.vb 中未找到 Public Const RestrictMcDownload As Boolean 参数定义，无法通过该参数解除限制！"
@@ -160,9 +156,9 @@ jobs:
           if (-not $shortSha) {
             $shortSha = (git rev-parse --short HEAD).Trim()
           }
-          $suffix = if ("${{ github.event.inputs.tag_suffix }}" -ne "") { "${{ github.event.inputs.tag_suffix }}" } else { "-preview" }
+          $suffix = "${{ github.event.inputs.tag_suffix }}"
           $tagName = "v$version-$shortSha$suffix"
-          $isPrerelease = if ("${{ github.event.inputs.prerelease }}" -eq "false") { "false" } else { "true" }
+          $isPrerelease = if ("${{ github.event.inputs.prerelease }}" -eq "true") { "true" } else { "false" }
           $releaseTitle = if ($isPrerelease -eq "true") { "PCL2 $version Preview (解除MC下载限制版)" } else { "PCL2 $version (解除MC下载限制版)" }
           Write-Host "Version: $version, Tag: $tagName, Prerelease: $isPrerelease"
           "version=$version" >> $env:GITHUB_OUTPUT
@@ -209,7 +205,6 @@ jobs:
         shell: pwsh
         env:
           SEC_CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          SEC_CF_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
           $secretFile = Resolve-Path "Plain Craft Launcher 2\Modules\ModSecret.vb"
@@ -217,20 +212,6 @@ jobs:
           if (-not [string]::IsNullOrEmpty($env:SEC_CLIENT_ID)) {
             $target = 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "' + $env:SEC_CLIENT_ID + '")'
             $content = [regex]::Replace($content, 'Public OAuthClientId As String = If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\), "[^"]*"\)', { param($m) $target })
-          }
-          if (-not [string]::IsNullOrEmpty($env:SEC_CF_KEY)) {
-            $keyBytes = [System.Text.Encoding]::UTF8.GetBytes($env:SEC_CF_KEY)
-            $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-            $maskBytes = New-Object Byte[] $keyBytes.Length
-            $rng.GetBytes($maskBytes)
-            $xorBytes = New-Object Byte[] $keyBytes.Length
-            for ($i = 0; $i -lt $keyBytes.Length; $i++) {
-              $xorBytes[$i] = $keyBytes[$i] -bxor $maskBytes[$i]
-            }
-            $xorStr = ($xorBytes -join ", ")
-            $maskStr = ($maskBytes -join ", ")
-            $content = $content.Replace('Private ReadOnly CurseForgeKeyXor As Byte() = {}', "Private ReadOnly CurseForgeKeyXor As Byte() = {$xorStr}")
-            $content = $content.Replace('Private ReadOnly CurseForgeKeyMask As Byte() = {}', "Private ReadOnly CurseForgeKeyMask As Byte() = {$maskStr}")
           }
           [System.IO.File]::WriteAllText($secretFile, $content, [System.Text.Encoding]::UTF8)
 
