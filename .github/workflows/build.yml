@@ -51,10 +51,38 @@ jobs:
 
 
     - name: Replace
+      shell: pwsh
+      env:
+        SEC_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+        SEC_CF_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+        COMMIT_SHA: ${{ github.sha }}
       run: |
-        (gc "Plain Craft Launcher 2\Modules\ModSecret.vb") -replace 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "")', 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "${{ secrets.CLIENT_ID }}")' | Out-File "Plain Craft Launcher 2\Modules\ModSecret.vb"
-        (gc "Plain Craft Launcher 2\Modules\ModSecret.vb") -replace 'Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "")', 'Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "${{ secrets.CURSEFORGE_API_KEY }}")' | Out-File "Plain Craft Launcher 2\Modules\ModSecret.vb"
-        (gc "Plain Craft Launcher 2\Modules\Base\ModBase.vb") -replace 'Public Const CommitHash As String = ""', 'Public Const CommitHash As String = "${{ github.sha }}"' | Out-File "Plain Craft Launcher 2\Modules\Base\ModBase.vb"
+        $secretFile = Resolve-Path "Plain Craft Launcher 2\Modules\ModSecret.vb"
+        $content = [System.IO.File]::ReadAllText($secretFile, [System.Text.Encoding]::UTF8)
+        if (-not [string]::IsNullOrEmpty($env:SEC_CLIENT_ID)) {
+          $target = 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "' + $env:SEC_CLIENT_ID + '")'
+          $content = [regex]::Replace($content, 'Public OAuthClientId As String = If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\), "[^"]*"\)', { param($m) $target })
+        }
+        if (-not [string]::IsNullOrEmpty($env:SEC_CF_KEY)) {
+          $keyBytes = [System.Text.Encoding]::UTF8.GetBytes($env:SEC_CF_KEY)
+          $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+          $maskBytes = New-Object Byte[] $keyBytes.Length
+          $rng.GetBytes($maskBytes)
+          $xorBytes = New-Object Byte[] $keyBytes.Length
+          for ($i = 0; $i -lt $keyBytes.Length; $i++) {
+            $xorBytes[$i] = $keyBytes[$i] -bxor $maskBytes[$i]
+          }
+          $xorStr = ($xorBytes -join ", ")
+          $maskStr = ($maskBytes -join ", ")
+          $content = $content.Replace('Private ReadOnly CurseForgeKeyXor As Byte() = {}', "Private ReadOnly CurseForgeKeyXor As Byte() = {$xorStr}")
+          $content = $content.Replace('Private ReadOnly CurseForgeKeyMask As Byte() = {}', "Private ReadOnly CurseForgeKeyMask As Byte() = {$maskStr}")
+        }
+        [System.IO.File]::WriteAllText($secretFile, $content, [System.Text.Encoding]::UTF8)
+
+        $modBaseFile = Resolve-Path "Plain Craft Launcher 2\Modules\Base\ModBase.vb"
+        $modBaseContent = [System.IO.File]::ReadAllText($modBaseFile, [System.Text.Encoding]::UTF8)
+        $modBaseContent = $modBaseContent.Replace('Public Const CommitHash As String = ""', 'Public Const CommitHash As String = "' + $env:COMMIT_SHA + '"')
+        [System.IO.File]::WriteAllText($modBaseFile, $modBaseContent, [System.Text.Encoding]::UTF8)
         
     - name: Restore NuGet Packages
       run: dotnet restore PCLCS\PCLCS.csproj
@@ -63,6 +91,7 @@ jobs:
       run: msbuild "Plain Craft Launcher 2\Plain Craft Launcher 2.vbproj" -p:Configuration=${{ matrix.configuration }}
 
     - name: Upload a Build Artifact
+      if: false
       uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.configuration }} ${{ env.describe }}

@@ -23,7 +23,6 @@ on:
       - 'Plain Craft Launcher 2/**'
       - 'PCLCS/**'
       - 'MeloongCore/**'
-      - '.github/workflows/sync-and-release.yml'
 
 permissions:
   contents: write
@@ -85,6 +84,10 @@ jobs:
               Write-Host "RestrictMcDownload is already False."
             }
             $content = $content -replace 'Public\s+OAuthClientId\s+As\s+String\s*=\s*If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\),\s*""\)', 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "0ad61f75-d686-4c70-af9a-536a6d798bfc")'
+            if ($content -notmatch 'CurseForgeKeyXor') {
+              $cfReplacement = "Private ReadOnly CurseForgeKeyXor As Byte() = {}`r`n    Private ReadOnly CurseForgeKeyMask As Byte() = {}`r`n    Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable(""PCL_CURSEFORGE_API_KEY""), If(CurseForgeKeyXor.Length > 0 AndAlso CurseForgeKeyXor.Length = CurseForgeKeyMask.Length, Encoding.UTF8.GetString(CurseForgeKeyXor.Select(Function(b, i) b Xor CurseForgeKeyMask(i)).ToArray()), """"))"
+              $content = [regex]::Replace($content, 'Public\s+CurseForgeAPIKey\s+As\s+String\s*=\s*If\(Environment\.GetEnvironmentVariable\("PCL_CURSEFORGE_API_KEY"\),\s*""\)', { param($m) $cfReplacement })
+            }
             [System.IO.File]::WriteAllText((Resolve-Path $secretFile), $content, [System.Text.Encoding]::UTF8)
           } else {
             Write-Error "在 ModSecret.vb 中未找到 Public Const RestrictMcDownload As Boolean 参数定义，无法通过该参数解除限制！"
@@ -216,8 +219,18 @@ jobs:
             $content = [regex]::Replace($content, 'Public OAuthClientId As String = If\(Environment\.GetEnvironmentVariable\("PCL_MS_CLIENT_ID"\), "[^"]*"\)', { param($m) $target })
           }
           if (-not [string]::IsNullOrEmpty($env:SEC_CF_KEY)) {
-            $targetCf = 'Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "' + $env:SEC_CF_KEY + '")'
-            $content = [regex]::Replace($content, 'Public CurseForgeAPIKey As String = If\(Environment\.GetEnvironmentVariable\("PCL_CURSEFORGE_API_KEY"\), "[^"]*"\)', { param($m) $targetCf })
+            $keyBytes = [System.Text.Encoding]::UTF8.GetBytes($env:SEC_CF_KEY)
+            $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+            $maskBytes = New-Object Byte[] $keyBytes.Length
+            $rng.GetBytes($maskBytes)
+            $xorBytes = New-Object Byte[] $keyBytes.Length
+            for ($i = 0; $i -lt $keyBytes.Length; $i++) {
+              $xorBytes[$i] = $keyBytes[$i] -bxor $maskBytes[$i]
+            }
+            $xorStr = ($xorBytes -join ", ")
+            $maskStr = ($maskBytes -join ", ")
+            $content = $content.Replace('Private ReadOnly CurseForgeKeyXor As Byte() = {}', "Private ReadOnly CurseForgeKeyXor As Byte() = {$xorStr}")
+            $content = $content.Replace('Private ReadOnly CurseForgeKeyMask As Byte() = {}', "Private ReadOnly CurseForgeKeyMask As Byte() = {$maskStr}")
           }
           [System.IO.File]::WriteAllText($secretFile, $content, [System.Text.Encoding]::UTF8)
 
