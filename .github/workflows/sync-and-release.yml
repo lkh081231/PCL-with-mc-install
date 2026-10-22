@@ -27,6 +27,11 @@ on:
 permissions:
   contents: write
 
+# 防止定时 / push / 手动触发同时运行导致重复发布
+concurrency:
+  group: sync-and-release
+  cancel-in-progress: false
+
 jobs:
   sync-build-release:
     name: Sync Upstream, Verify & Build Release
@@ -156,17 +161,10 @@ jobs:
           if (-not $shortSha) {
             $shortSha = (git rev-parse --short HEAD).Trim()
           }
-          $suffix = if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            "${{ github.event.inputs.tag_suffix }}"
-          } else {
-            "-preview"
-          }
+          # 自动触发（schedule / push）默认发布正式版；手动触发时按输入参数决定
+          $suffix = "${{ github.event.inputs.tag_suffix }}"
           $tagName = "v$version-$shortSha$suffix"
-          $isPrerelease = if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            if ("${{ github.event.inputs.prerelease }}" -eq "true") { "true" } else { "false" }
-          } else {
-            "true"
-          }
+          $isPrerelease = if ("${{ github.event.inputs.prerelease }}" -eq "true") { "true" } else { "false" }
           $releaseTitle = if ($isPrerelease -eq "true") { "PCL2 $version Preview (解除MC下载限制版)" } else { "PCL2 $version (解除MC下载限制版)" }
           Write-Host "Version: $version, Tag: $tagName, Prerelease: $isPrerelease"
           "version=$version" >> $env:GITHUB_OUTPUT
@@ -187,6 +185,51 @@ jobs:
           "should_build=true" >> $env:GITHUB_OUTPUT
           $global:LASTEXITCODE = 0
           exit 0
+
+      - name: Verify CurseForge Proxy Key
+        if: steps.check_release.outputs.should_build == 'true'
+        shell: pwsh
+        env:
+          SEC_PROXY_KEY: ${{ secrets.CF_PROXY_KEY }}
+        run: |
+          if ([string]::IsNullOrEmpty($env:SEC_PROXY_KEY)) {
+            Write-Error "未配置 CF_PROXY_KEY Secret，发布的启动器将无法使用 CurseForge 下载！"
+            exit 1
+          }
+
+          # 从 ModSecret.vb 读取代理地址，与启动器实际使用的地址保持一致
+          $secretContent = Get-Content "Plain Craft Launcher 2\Modules\ModSecret.vb" -Raw
+          if ($secretContent -notmatch 'GetEnvironmentVariable\("PCL_CURSEFORGE_API_PROXY"\),\s*"([^"]+)"\)') {
+            Write-Error "在 ModSecret.vb 中未找到 CurseForgeAPIProxy 代理地址！"
+            exit 1
+          }
+          $testUrl = $Matches[1].TrimEnd('/') + "/v1/mods/238222"
+          $headers = @{
+            "Ocp-Apim-Subscription-Key" = $env:SEC_PROXY_KEY
+            "User-Agent" = "PCL2/${{ steps.check_release.outputs.version }}.0"
+          }
+
+          # 最多重试 3 次，避免网络抖动导致误报
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            try {
+              $resp = Invoke-WebRequest -Uri $testUrl -Headers $headers -TimeoutSec 30 -SkipHttpErrorCheck
+              $status = [int]$resp.StatusCode
+              if ($status -eq 200 -and ($resp.Content | ConvertFrom-Json).data.id -eq 238222) {
+                Write-Host "CurseForge 代理 Key 测试通过 (HTTP 200)。"
+                exit 0
+              }
+              $body = "$($resp.Content)"
+              if ($body.Length -gt 300) { $body = $body.Substring(0, 300) }
+              Write-Host "第 $attempt 次测试失败：HTTP $status $body"
+              # 401/403 说明 Key 错误或被拒绝，重试无意义
+              if ($status -eq 401 -or $status -eq 403) { break }
+            } catch {
+              Write-Host "第 $attempt 次测试失败：$($_.Exception.Message)"
+            }
+            if ($attempt -lt 3) { Start-Sleep -Seconds 10 }
+          }
+          Write-Error "CurseForge 代理 Key 测试失败（$testUrl），已中止发布。请检查 CF_PROXY_KEY Secret 与 APIM 配置。"
+          exit 1
 
       - name: Setup MSBuild.exe
         if: steps.check_release.outputs.should_build == 'true'
@@ -276,6 +319,7 @@ jobs:
           prerelease: ${{ steps.check_release.outputs.prerelease == 'true' }}
           body: |
             自动同步上游 [Meloong-Git/PCL](https://github.com/Meloong-Git/PCL) 并解除 MC 下载限制。
+            已支持 CurseForge 资源检索与下载（本次发布前已自动验证代理可用）。
             解压 `${{ steps.package.outputs.zip_name }}` 即可直接运行 `Plain Craft Launcher 2.exe`。
           files: |
             ${{ steps.package.outputs.zip_name }}
